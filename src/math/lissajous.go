@@ -4,41 +4,44 @@ import (
 	"image"
 	"image/color"
 	"image/gif"
-	"io"
 	"math"
-	"math/rand"
 )
 
-var palette = []color.Color{color.White, color.Black}
+type GifMathematicalGenerator struct {
+	XYCalculator                            func(t float64) (x, y float64)
+	PostFrameCalculation                    func()
+	Nframes, Delay, Cycles, Size, Thickness int
+	Res                                     float64
+	Palette                                 []color.Color
+}
 
-const (
-	whiteIndex = 0
-	blackIndex = 1
-)
-
-func Lissajous(out io.Writer) {
-	const (
-		cycles  = 5
-		res     = 0.001
-		size    = 100
-		nframes = 64
-		delay   = 8
-	)
-
-	freq := rand.Float64() * 3.0 // relative frequency of oscillator
-	anim := gif.GIF{LoopCount: nframes}
-	phase := 0.0 // phase difference
-	for i := 0; i < nframes; i++ {
-		rect := image.Rect(0, 0, 2*size+1, 2*size+1)
-		img := image.NewPaletted(rect, palette)
-		for t := 0.0; t < cycles*2*math.Pi; t += res {
-			x := math.Sin(t)
-			y := math.Sin(t*freq + phase)
-			img.SetColorIndex(size+int(x*size+0.5), size+int(y*size+0.5), blackIndex)
+func (g *GifMathematicalGenerator) Generate() *gif.GIF {
+	anim := gif.GIF{LoopCount: g.Nframes}
+	for i := 1; i <= g.Nframes; i++ {
+		rect := image.Rect(0, 0, int(2*g.Size+1), int(2*g.Size+1))
+		img := image.NewPaletted(rect, g.Palette)
+		for t := 0.0; t < float64(g.Cycles)*2*math.Pi; t += g.Res {
+			x, y := g.XYCalculator(t)
+			thickness(g.Thickness, img, float64(g.Size), x, y, len(g.Palette))
 		}
-		phase += 0.1
-		anim.Delay = append(anim.Delay, delay)
+		g.PostFrameCalculation()
+		anim.Delay = append(anim.Delay, g.Delay)
 		anim.Image = append(anim.Image, img)
 	}
-	gif.EncodeAll(out, &anim)
+	return &anim
+}
+
+func thickness(thickness int, img *image.Paletted, size, x, y float64, lengthPalette int) {
+	preCalcX := size + x*size + 0.5
+	preCalcY := size + y*size + 0.5
+	l := lengthPalette - 3
+	for i := 0; i < thickness; i++ {
+		scaledx := preCalcX + float64(i)
+		coloridx := colorSelector(scaledx, size*2, l)
+		img.SetColorIndex(int(scaledx), int(preCalcY), coloridx)
+	}
+}
+
+func colorSelector(x, size float64, lengthPalette int) (idx uint8) {
+	return uint8(x/size*float64(lengthPalette)) + 1
 }
